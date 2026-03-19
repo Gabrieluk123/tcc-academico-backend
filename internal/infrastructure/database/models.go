@@ -1,4 +1,3 @@
-// internal/infrastructure/database/models.go
 package database
 
 import (
@@ -8,6 +7,14 @@ import (
 
 	"github.com/google/uuid"
 )
+
+type RefreshTokenDB struct {
+	ID        string    `gorm:"primaryKey;type:uuid;column:id"`
+	UserID    string    `gorm:"type:uuid;column:user_id;index"`
+	Token     string    `gorm:"column:token;uniqueIndex"`
+	ExpiresAt time.Time `gorm:"column:expires_at"`
+	Revoked   bool      `gorm:"column:revoked"`
+}
 
 type UserDB struct {
 	ID           uuid.UUID  `gorm:"primaryKey;type:uuid;column:id"`
