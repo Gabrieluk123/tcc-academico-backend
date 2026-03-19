@@ -29,6 +29,24 @@ func (m *MockUserRepository) FindByEmail(ctx context.Context, email string) (*do
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
+func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) error {
+	args := m.Called(ctx, user)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) List(ctx context.Context) ([]*domain.User, error) {
+	args := m.Called(ctx)
+	if args.Get(0) != nil {
+		return args.Get(0).([]*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 type MockTokenGenerator struct{ mock.Mock }
 
 func (m *MockTokenGenerator) GenerateToken(ctx context.Context, user *domain.User) (string, error) {
@@ -92,13 +110,13 @@ func TestLogin_EmailNotFound(t *testing.T) {
 	refreshRepo := new(MockRefreshTokenRepository)
 	tokenGen := new(MockTokenGenerator)
 
-	userRepo.On("FindByEmail", ctx, "notfound@email.com").Return((*domain.User)(nil), errors.New("not found"))
+	userRepo.On("FindByEmail", ctx, "notfound@email.com").Return((*domain.User)(nil), errors.New("registro não encontrado no bd"))
 
 	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
 	_, err := uc.Login(ctx, "notfound@email.com", "password")
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+	assert.ErrorIs(t, err, domain.ErrInvalidCredentials)
 }
 
 func TestLogin_UserInactive(t *testing.T) {
@@ -139,11 +157,11 @@ func TestLogin_WrongPassword(t *testing.T) {
 	}
 
 	userRepo.On("FindByEmail", ctx, "wrongpass@email.com").Return(user, nil)
-	hashProvider.On("CompareHash", "hashed", "wrong").Return(errors.New("senha incorreta"))
+	hashProvider.On("CompareHash", "hashed", "wrong").Return(errors.New("bcrypt hash mismatch"))
 
 	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
 	_, err := uc.Login(ctx, "wrongpass@email.com", "wrong")
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "senha incorreta")
+	assert.ErrorIs(t, err, domain.ErrInvalidCredentials)
 }

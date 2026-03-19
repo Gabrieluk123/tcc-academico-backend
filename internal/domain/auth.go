@@ -4,8 +4,12 @@ import (
 	"context"
 	"time"
 
+	"errors"
+
 	"github.com/google/uuid"
 )
+
+var ErrInvalidCredentials = errors.New("e-mail ou senha inválidos")
 
 type AuthUseCase interface {
 	Login(ctx context.Context, email, password string) (string, error)

@@ -37,7 +37,8 @@ func (uc *authUseCase) Login(ctx context.Context, email, password string) (strin
 	if err != nil {
 		masked := maskEmail(email)
 		slog.ErrorContext(ctx, "falha ao buscar usuario por email", slog.String("email", masked), slog.String("error", err.Error()))
-		return "", fmt.Errorf("email nao encontrado: %w", err)
+		// CORREÇÃO: Retorna o erro seguro
+		return "", domain.ErrInvalidCredentials
 	}
 
 	if !user.IsActive {
@@ -50,7 +51,7 @@ func (uc *authUseCase) Login(ctx context.Context, email, password string) (strin
 	if err != nil {
 		masked := maskEmail(user.Email)
 		slog.ErrorContext(ctx, "senha incorreta", slog.String("email", masked), slog.String("user_id", user.ID.String()))
-		return "", fmt.Errorf("senha incorreta: %w", err)
+		return "", domain.ErrInvalidCredentials
 	}
 
 	token, err := uc.tokenGen.GenerateToken(ctx, user)
