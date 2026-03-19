@@ -10,15 +10,17 @@ Sistema single-tenant para a Escola Municipal Dr. Auto de Oliveira Pinto. Foco: 
 - **Banco de Dados:** PostgreSQL (GORM).
 - **Observabilidade:** Logs estruturados em JSON (ex: pacote `log/slog` nativo do Go 1.21+).
 
-## 3. Padrão Arquitetural: Clean Architecture + DDD
-A aplicação DEVE ser estritamente focada em contratos (Interfaces). A dependência deve sempre apontar para o centro (Domínio).
-- **Domain Layer:** Contém as Entidades (structs puras) e as Interfaces dos Repositórios (Contratos). ZERO dependências externas ou de banco de dados.
-- **Use Case Layer:** Contém a lógica de negócio. Recebe as interfaces dos repositórios via Injeção de Dependência.
-- **HTTP Layer (Transport):** Focada no framework Echo.
-  - `/http/handler`: Funções que fazem o bind do request, chamam o Use Case e retornam JSON.
-  - `/http/middleware`: Middlewares customizados do Echo (JWT, injeção de Contexto, Casbin).
-  - `/http/route.go`: Arquivo central de roteamento.
-- **Infrastructure Layer:** Implementações reais das interfaces (GORM Repositories, DB connection).
+## 3. Padrão Arquitetural: Go Standard Layout + Clean Architecture
+A aplicação segue o padrão oficial do Go, isolando código privado na pasta `internal/`.
+- **`cmd/api/main.go`**: Ponto de entrada da aplicação. Inicializa dependências (Wire up).
+- **`internal/common/`**: Utilitários globais, formatação de erros padrão, logger e structs base (ex: `TimeOfDay`).
+- **`internal/domain/` (FLAT DOMAIN):** Contém TODAS as entidades (structs puras) e Interfaces (Contratos) em um único pacote (`package domain`). Isso evita ciclos de importação (Circular Dependencies). Não crie subpastas aqui.
+- **`internal/usecase/` (PACKAGE BY FEATURE):** Lógica de negócio agrupada por módulo. Ex: `internal/usecase/auth` (`package auth`).
+- **`internal/http/` (TRANSPORT):** Focada no framework Echo.
+  - `/handler`: Agrupado por feature. Ex: `internal/http/handler/auth`.
+  - `/middleware`: Middlewares customizados do Echo.
+  - `/route.go`: Configuração das rotas.
+- **`internal/infrastructure/` (PACKAGE BY FEATURE):** Implementações reais agrupadas por módulo. Ex: `internal/infrastructure/auth` (Hash, JWT) e `internal/infrastructure/database` (GORM).
 
 ## 4. Regras de Modelagem de Dados
 - **Identificadores (IDs Múltiplos):**
@@ -27,6 +29,11 @@ A aplicação DEVE ser estritamente focada em contratos (Interfaces). A dependê
 - **Enums:** Propriedades restritas devem usar tipos customizados em Go atuando como Enums. 
   - Exemplo para `DayOfWeek`: Crie `type DayOfWeek int` e defina constantes (`Segunda DayOfWeek = 1`, etc). NUNCA use `int` solto ou `string` para representar dias da semana.
 - **Horários:** A entidade `Aula` (agenda recorrente) usa o utilitário `TimeOfDay` (HH:MM:SS). A entidade `DiarioDeClasse` (registro histórico) usa `time.Time`.
+- **Controle de Acesso (IAM e Perfis):**
+  - NUNCA faça hardcode de Roles (Papéis) ou Permissões usando Enums (`iota`). O sistema possui criação dinâmica de perfis para integração com Casbin.
+  - O domínio DEVE possuir as entidades `Role` (ID UUIDv7, Nome, Descricao) e `Permission` (ID UUIDv7, Slug, Descricao).
+  - A entidade `User` DEVE possuir um campo `RoleID` do tipo `uuid.UUID` apontando para a entidade `Role`.
+  - O papel "Admin" é apenas o registro inicial (bootstrap) no banco de dados, e não uma constante solta no código.
 
 ## 5. Regras de Observabilidade e Logging (CRÍTICO)
 - **Logs Estruturados:** Todos os logs devem ter níveis (INFO, WARN, ERROR) e formato JSON.

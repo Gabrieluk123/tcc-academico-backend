@@ -27,5 +27,8 @@
 
 4. Tratamento de Erros e Early Returns
 - Se uma função falhar, adicione contexto ao erro antes de subir na pilha usando fmt.Errorf("contexto da falha: %w", err). Nunca "engula" erros omitindo o erro original.
-
 - Use Early Returns para evitar aninhamento visual profundo (if/else hell). Retorne erros o mais rápido possível na função.
+
+## 5. Nomenclatura Idiomática Go e Testes
+- **Sem Stuttering:** Evite repetições no nome do pacote e da variável. Um pacote `auth` não deve ter uma função `NewAuthUseCase`. Use `auth.NewUseCase()`. O pacote `domain` não deve ter `AuthDomain`.
+- **Black-box Testing:** Todos os arquivos de teste de Use Cases e Handlers DEVEM usar o sufixo `_test` no pacote (ex: `package auth_test`). Importe o pacote que está sendo testado para garantir o isolamento e testar apenas a API pública (contratos).
