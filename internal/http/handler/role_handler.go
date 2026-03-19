@@ -18,21 +18,20 @@ func NewRoleHandler(roleUseCase domain.RoleUseCase) *RoleHandler {
 }
 
 // ================= DTOs =================
-
 type createRoleRequest struct {
-	Nome      string `json:"nome"`
-	Descricao string `json:"descricao"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 type updateRoleRequest struct {
-	Nome      *string `json:"nome"`
-	Descricao *string `json:"descricao"`
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
 }
 
 type roleResponse struct {
-	ID        string `json:"id"`
-	Nome      string `json:"nome"`
-	Descricao string `json:"descricao"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // ================= HANDLERS =================
@@ -41,44 +40,44 @@ type roleResponse struct {
 func (h *RoleHandler) Create(c *echo.Context) error {
 	var req createRoleRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "dados inválidos")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid data")
 	}
 
 	role := &domain.Role{
-		ID:        uuid.New(),
-		Nome:      req.Nome,
-		Descricao: req.Descricao,
+		ID:          uuid.New(),
+		Name:        req.Name,
+		Description: req.Description,
 	}
 
 	if err := h.roleUseCase.CreateRole(c.Request().Context(), role); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao criar perfil")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create role")
 	}
 
 	resp := roleResponse{
-		ID:        role.ID.String(),
-		Nome:      role.Nome,
-		Descricao: role.Descricao,
+		ID:          role.ID.String(),
+		Name:        role.Name,
+		Description: role.Description,
 	}
 	return c.JSON(http.StatusCreated, resp)
 }
 
 // GetByID (GET /roles/:id)
 func (h *RoleHandler) GetByID(c *echo.Context) error {
-	idStr := c.Param("id") // CORRIGIDO: Echo v5 padrao string
+	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "id inválido")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
 	}
 
 	role, err := h.roleUseCase.FindRoleByID(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "perfil não encontrado")
+		return echo.NewHTTPError(http.StatusNotFound, "role not found")
 	}
 
 	resp := roleResponse{
-		ID:        role.ID.String(),
-		Nome:      role.Nome,
-		Descricao: role.Descricao,
+		ID:          role.ID.String(),
+		Name:        role.Name,
+		Description: role.Description,
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -87,15 +86,15 @@ func (h *RoleHandler) GetByID(c *echo.Context) error {
 func (h *RoleHandler) List(c *echo.Context) error {
 	roles, err := h.roleUseCase.ListRoles(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao listar perfis")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list roles")
 	}
 
 	resp := make([]roleResponse, 0, len(roles))
 	for _, role := range roles {
 		resp = append(resp, roleResponse{
-			ID:        role.ID.String(),
-			Nome:      role.Nome,
-			Descricao: role.Descricao,
+			ID:          role.ID.String(),
+			Name:        role.Name,
+			Description: role.Description,
 		})
 	}
 	return c.JSON(http.StatusOK, resp)
@@ -121,11 +120,11 @@ func (h *RoleHandler) PartialUpdate(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "perfil não encontrado")
 	}
 
-	if req.Nome != nil {
-		role.Nome = *req.Nome
+	if req.Name != nil {
+		role.Name = *req.Name
 	}
-	if req.Descricao != nil {
-		role.Descricao = *req.Descricao
+	if req.Description != nil {
+		role.Description = *req.Description
 	}
 
 	if err := h.roleUseCase.UpdateRole(ctx, role); err != nil {
@@ -133,16 +132,16 @@ func (h *RoleHandler) PartialUpdate(c *echo.Context) error {
 	}
 
 	resp := roleResponse{
-		ID:        role.ID.String(),
-		Nome:      role.Nome,
-		Descricao: role.Descricao,
+		ID:          role.ID.String(),
+		Name:        role.Name,
+		Description: role.Description,
 	}
 	return c.JSON(http.StatusOK, resp)
 }
 
 // Delete (DELETE /roles/:id)
 func (h *RoleHandler) Delete(c *echo.Context) error {
-	idStr := c.Param("id") // CORRIGIDO
+	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "id inválido")

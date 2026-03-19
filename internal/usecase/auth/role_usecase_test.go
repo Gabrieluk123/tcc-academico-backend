@@ -41,7 +41,7 @@ func TestCreateRole(t *testing.T) {
 	ctx := context.Background()
 	roleRepo := new(mockRoleRepo)
 
-	role := &domain.Role{Nome: "Admin"}
+	role := &domain.Role{Name: "Admin"}
 	roleRepo.On("Create", ctx, role).Return(nil)
 
 	uc := auth.NewRoleUseCase(roleRepo)

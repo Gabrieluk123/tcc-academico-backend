@@ -61,7 +61,7 @@ func TestCreateUser_HashesPassword(t *testing.T) {
 	userRepo := new(mockUserRepo)
 	hashProv := new(mockHashProvider)
 
-	user := &domain.User{Email: "foo@bar.com", PasswordHash: "senha"}
+	user := &domain.User{FirstName: "Foo", LastName: "Bar", Email: "foo@bar.com", PasswordHash: "senha"}
 
 	hashProv.On("HashPassword", "senha").Return("hashed", nil)
 	userRepo.On("Create", ctx, mock.AnythingOfType("*domain.User")).Return(nil)
@@ -79,7 +79,7 @@ func TestDeleteUser_LogsAndDisables(t *testing.T) {
 	userRepo := new(mockUserRepo)
 	hashProv := new(mockHashProvider)
 
-	user := &domain.User{ID: uuid.Nil, IsActive: true}
+	user := &domain.User{ID: uuid.Nil, FirstName: "Foo", LastName: "Bar", IsActive: true}
 	userRepo.On("FindByID", ctx, user.ID).Return(user, nil)
 	userRepo.On("Update", ctx, user).Return(nil)
 

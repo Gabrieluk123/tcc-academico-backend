@@ -8,24 +8,25 @@ import (
 )
 
 type Role struct {
-	ID        uuid.UUID
-	Nome      string
-	Descricao string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          uuid.UUID
+	Name        string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type Permission struct {
-	ID        uuid.UUID
-	Slug      string
-	Descricao string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          uuid.UUID
+	Slug        string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type User struct {
 	ID           uuid.UUID
-	Nome         string
+	FirstName    string
+	LastName     string
 	Email        string
 	PasswordHash string
 	RoleID       uuid.UUID
@@ -36,6 +37,10 @@ type User struct {
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+func (u *User) FullName() string {
+	return u.FirstName + " " + u.LastName
 }
 
 type UserRepository interface {

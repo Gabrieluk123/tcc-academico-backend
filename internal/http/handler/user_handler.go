@@ -18,27 +18,29 @@ func NewUserHandler(userUseCase domain.UserUseCase) *UserHandler {
 }
 
 // ================= DTOs =================
-
 type createUserRequest struct {
-	Nome     string    `json:"nome"`
-	Email    string    `json:"email"`
-	Password string    `json:"password"`
-	RoleID   uuid.UUID `json:"role_id"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	Email     string    `json:"email"`
+	Password  string    `json:"password"`
+	RoleID    uuid.UUID `json:"role_id"`
 }
 
 type updateUserRequest struct {
-	Nome     *string    `json:"nome"`
-	Email    *string    `json:"email"`
-	RoleID   *uuid.UUID `json:"role_id"`
-	IsActive *bool      `json:"is_active"`
+	FirstName *string    `json:"first_name"`
+	LastName  *string    `json:"last_name"`
+	Email     *string    `json:"email"`
+	RoleID    *uuid.UUID `json:"role_id"`
+	IsActive  *bool      `json:"is_active"`
 }
 
 type userResponse struct {
-	ID       string `json:"id"`
-	Nome     string `json:"nome"`
-	Email    string `json:"email"`
-	RoleID   string `json:"role_id"`
-	IsActive bool   `json:"is_active"`
+	ID        string `json:"id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Email     string `json:"email"`
+	RoleID    string `json:"role_id"`
+	IsActive  bool   `json:"is_active"`
 }
 
 // ================= HANDLERS =================
@@ -47,12 +49,13 @@ type userResponse struct {
 func (h *UserHandler) Create(c *echo.Context) error {
 	var req createUserRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "dados inválidos")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid data")
 	}
 
 	user := &domain.User{
 		ID:           uuid.New(),
-		Nome:         req.Nome,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
 		Email:        req.Email,
 		PasswordHash: req.Password,
 		RoleID:       req.RoleID,
@@ -60,38 +63,40 @@ func (h *UserHandler) Create(c *echo.Context) error {
 	}
 
 	if err := h.userUseCase.CreateUser(c.Request().Context(), user); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao criar usuário")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create user")
 	}
 
 	resp := userResponse{
-		ID:       user.ID.String(),
-		Nome:     user.Nome,
-		Email:    user.Email,
-		RoleID:   user.RoleID.String(),
-		IsActive: user.IsActive,
+		ID:        user.ID.String(),
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		Email:     user.Email,
+		RoleID:    user.RoleID.String(),
+		IsActive:  user.IsActive,
 	}
 	return c.JSON(http.StatusCreated, resp)
 }
 
 // GetByID (GET /users/:id)
 func (h *UserHandler) GetByID(c *echo.Context) error {
-	idStr := c.Param("id") // CORRIGIDO
+	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "id inválido")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
 	}
 
 	user, err := h.userUseCase.FindUserByID(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "usuário não encontrado")
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
 	}
 
 	resp := userResponse{
-		ID:       user.ID.String(),
-		Nome:     user.Nome,
-		Email:    user.Email,
-		RoleID:   user.RoleID.String(),
-		IsActive: user.IsActive,
+		ID:        user.ID.String(),
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		Email:     user.Email,
+		RoleID:    user.RoleID.String(),
+		IsActive:  user.IsActive,
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -100,17 +105,18 @@ func (h *UserHandler) GetByID(c *echo.Context) error {
 func (h *UserHandler) List(c *echo.Context) error {
 	users, err := h.userUseCase.ListUsers(c.Request().Context())
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao listar usuários")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list users")
 	}
 
 	resp := make([]userResponse, 0, len(users))
 	for _, user := range users {
 		resp = append(resp, userResponse{
-			ID:       user.ID.String(),
-			Nome:     user.Nome,
-			Email:    user.Email,
-			RoleID:   user.RoleID.String(),
-			IsActive: user.IsActive,
+			ID:        user.ID.String(),
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Email:     user.Email,
+			RoleID:    user.RoleID.String(),
+			IsActive:  user.IsActive,
 		})
 	}
 	return c.JSON(http.StatusOK, resp)
@@ -118,26 +124,29 @@ func (h *UserHandler) List(c *echo.Context) error {
 
 // PartialUpdate (PATCH /users/:id)
 func (h *UserHandler) PartialUpdate(c *echo.Context) error {
-	idStr := c.Param("id") // CORRIGIDO
+	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "id inválido")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
 	}
 
 	var req updateUserRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "dados inválidos")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid data")
 	}
 
 	ctx := c.Request().Context()
 
 	user, err := h.userUseCase.FindUserByID(ctx, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "usuário não encontrado")
+		return echo.NewHTTPError(http.StatusNotFound, "user not found")
 	}
 
-	if req.Nome != nil {
-		user.Nome = *req.Nome
+	if req.FirstName != nil {
+		user.FirstName = *req.FirstName
+	}
+	if req.LastName != nil {
+		user.LastName = *req.LastName
 	}
 	if req.Email != nil {
 		user.Email = *req.Email
@@ -150,22 +159,23 @@ func (h *UserHandler) PartialUpdate(c *echo.Context) error {
 	}
 
 	if err := h.userUseCase.UpdateUser(ctx, user); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao atualizar usuário")
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update user")
 	}
 
 	resp := userResponse{
-		ID:       user.ID.String(),
-		Nome:     user.Nome,
-		Email:    user.Email,
-		RoleID:   user.RoleID.String(),
-		IsActive: user.IsActive,
+		ID:        user.ID.String(),
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		Email:     user.Email,
+		RoleID:    user.RoleID.String(),
+		IsActive:  user.IsActive,
 	}
 	return c.JSON(http.StatusOK, resp)
 }
 
 // Deactivate (DELETE /users/:id)
 func (h *UserHandler) Deactivate(c *echo.Context) error {
-	idStr := c.Param("id") // CORRIGIDO
+	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "id inválido")
