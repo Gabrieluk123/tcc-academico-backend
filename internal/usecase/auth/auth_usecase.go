@@ -37,7 +37,6 @@ func (uc *authUseCase) Login(ctx context.Context, email, password string) (strin
 	if err != nil {
 		masked := maskEmail(email)
 		slog.ErrorContext(ctx, "falha ao buscar usuario por email", slog.String("email", masked), slog.String("error", err.Error()))
-		// CORREÇÃO: Retorna o erro seguro
 		return "", domain.ErrInvalidCredentials
 	}
 

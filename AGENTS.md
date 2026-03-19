@@ -32,3 +32,13 @@
 ## 5. Nomenclatura Idiomática Go e Testes
 - **Sem Stuttering:** Evite repetições no nome do pacote e da variável. Um pacote `auth` não deve ter uma função `NewAuthUseCase`. Use `auth.NewUseCase()`. O pacote `domain` não deve ter `AuthDomain`.
 - **Black-box Testing:** Todos os arquivos de teste de Use Cases e Handlers DEVEM usar o sufixo `_test` no pacote (ex: `package auth_test`). Importe o pacote que está sendo testado para garantir o isolamento e testar apenas a API pública (contratos).
+
+## 6. Padrões REST e Respostas HTTP (Richardson Maturity Model)
+- **JSON Estrito:** Absolutamente todas as respostas da API devem ser em JSON. Nunca retorne strings puras, HTML ou texto plano. Use sempre `c.JSON()`.
+- **Maturidade REST (Nível 2):** - Use `POST` para criação.
+  - Use `GET` para leitura.
+  - Use `PUT` para substituição completa do recurso.
+  - Use `PATCH` para atualizações parciais (use ponteiros nos DTOs para diferenciar valores zero de campos omitidos).
+  - Use `DELETE` para inativação lógica ou exclusão física.
+  - Retorne Status Codes exatos: `201 Created` (sucesso no POST), `204 No Content` (sucesso no DELETE, sem body), `200 OK` (GET, PUT, PATCH).
+- **Padronização de Erros:** Todo erro deve retornar um JSON. Em rotas do Echo v5, use `echo.NewHTTPError(http.Status..., "mensagem segura")`. Nunca vaze erros internos (ex: banco de dados) para o client.
