@@ -1,0 +1,6 @@
+name: dev
+variables:
+  - name: base_url
+    value: http://localhost:8080/api
+  - name: auth_token
+    value: ""

@@ -74,3 +74,25 @@ func FromDomainRole(r *domain.Role) *RoleDB {
 		Description: r.Description,
 	}
 }
+
+type PermissionDB struct {
+	ID          uuid.UUID `gorm:"primaryKey;type:uuid;column:id"`
+	Slug        string    `gorm:"uniqueIndex;column:slug"`
+	Description string    `gorm:"column:description"`
+}
+
+func (p *PermissionDB) ToDomain() *domain.Permission {
+	return &domain.Permission{
+		ID:          p.ID,
+		Slug:        p.Slug,
+		Description: p.Description,
+	}
+}
+
+func FromDomainPermission(p *domain.Permission) *PermissionDB {
+	return &PermissionDB{
+		ID:          p.ID,
+		Slug:        p.Slug,
+		Description: p.Description,
+	}
+}

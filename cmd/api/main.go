@@ -15,6 +15,7 @@ import (
 
 	routes "academico/internal/http"
 	"academico/internal/http/handler"
+	"academico/internal/http/middleware"
 	infraAuth "academico/internal/infrastructure/auth"
 	"academico/internal/infrastructure/database"
 	usecaseAuth "academico/internal/usecase/auth"
@@ -55,8 +56,18 @@ func main() {
 	}
 
 	slog.Info("executando automigrate do banco de dados...")
-	if err := db.AutoMigrate(&database.RoleDB{}, &database.UserDB{}, &database.RefreshTokenDB{}); err != nil {
+	if err := db.AutoMigrate(
+		&database.RoleDB{},
+		&database.UserDB{},
+		&database.RefreshTokenDB{},
+		&database.PermissionDB{},
+	); err != nil {
 		slog.Error("falha ao rodar migrations", slog.String("erro", err.Error()))
+		os.Exit(1)
+	}
+
+	if err := database.SeedPermissions(db); err != nil {
+		slog.Error("falha ao seedar permissões", slog.String("erro", err.Error()))
 		os.Exit(1)
 	}
 
@@ -68,14 +79,30 @@ func main() {
 	hashProvider := infraAuth.NewHashProvider()
 	tokenGenerator := infraAuth.NewJWTGenerator(jwtSecret, 24*time.Hour)
 
+	enforcer, err := infraAuth.NewCasbinEnforcer(db)
+	if err != nil {
+		slog.Error("falha ao inicializar Casbin", slog.String("erro", err.Error()))
+		os.Exit(1)
+	}
+
 	roleRepo := database.NewRoleRepository(db)
 	userRepo := database.NewUserRepository(db)
 	refreshRepo := database.NewRefreshTokenRepository(db)
+
+	if err := database.SeedAdminRole(db, enforcer); err != nil {
+		slog.Error("falha ao seedar role Admin", slog.String("erro", err.Error()))
+		os.Exit(1)
+	}
 
 	// B. Inicializa as Regras de Negócio (Use Cases)
 	roleUC := usecaseAuth.NewRoleUseCase(roleRepo)
 	userUC := usecaseAuth.NewUserUseCase(userRepo, hashProvider)
 	authUC := usecaseAuth.NewAuthUseCase(userRepo, tokenGenerator, hashProvider, refreshRepo)
+
+	if err := database.SeedSystemAdmin(context.Background(), userUC); err != nil {
+		slog.Error("falha ao seedar usuário admin", slog.String("erro", err.Error()))
+		os.Exit(1)
+	}
 
 	// C. Inicializa os Controladores da Web (Handlers)
 	roleHandler := handler.NewRoleHandler(roleUC)
@@ -94,7 +121,8 @@ func main() {
 		})
 	})
 
-	routes.SetupRoutes(e, authHandler, userHandler, roleHandler)
+	jwtMW := middleware.NewJWTMiddleware(jwtSecret)
+	routes.SetupRoutes(e, authHandler, userHandler, roleHandler, jwtMW, enforcer, roleRepo)
 
 	// =========================================================================
 	// 6. Configuração do Servidor HTTP
