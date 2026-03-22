@@ -1,6 +1,7 @@
 name: dev
+color: "#d85d43"
 variables:
   - name: base_url
-    value: http://localhost:8080/api
-  - name: auth_token
-    value: ""
+    value: http://localhost:8080
+  - secret: true
+    name: auth_token

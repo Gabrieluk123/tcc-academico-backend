@@ -1,0 +1,23 @@
+info:
+  name: Partial Update User
+  type: http
+  seq: 2
+
+http:
+  method: PATCH
+  url: "{{base_url}}/api/v1/users/0f002c77-947f-4f9d-a400-82f031a55eff"
+  body:
+    type: json
+    data: |-
+      {
+        "first_name": "Joãozinho",
+        "is_active": false,
+        "role_id": "e1a2cbd0-a850-4878-be8f-5993628cdb52"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

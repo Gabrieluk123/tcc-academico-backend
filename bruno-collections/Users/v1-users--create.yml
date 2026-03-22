@@ -1,0 +1,25 @@
+info:
+  name: Create User
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{base_url}}/api/v1/users"
+  body:
+    type: json
+    data: |-
+      {
+        "first_name": "João",
+        "last_name": "Silva",
+        "email": "joao.silva@escola.com",
+        "password": "senha123",
+        "role_id": "e342b0e5-a3ca-402f-aea1-35b128b734fe"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

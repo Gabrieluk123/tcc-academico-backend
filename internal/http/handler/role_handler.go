@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"time"
 
 	"academico/internal/domain"
 
@@ -29,9 +30,21 @@ type updateRoleRequest struct {
 }
 
 type roleResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func toRoleResponse(role *domain.Role) roleResponse {
+	return roleResponse{
+		ID:          role.ID.String(),
+		Name:        role.Name,
+		Description: role.Description,
+		CreatedAt:   role.CreatedAt,
+		UpdatedAt:   role.UpdatedAt,
+	}
 }
 
 // ================= HANDLERS =================
@@ -53,12 +66,7 @@ func (h *RoleHandler) Create(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create role")
 	}
 
-	resp := roleResponse{
-		ID:          role.ID.String(),
-		Name:        role.Name,
-		Description: role.Description,
-	}
-	return c.JSON(http.StatusCreated, resp)
+	return c.JSON(http.StatusCreated, toRoleResponse(role))
 }
 
 // GetByID (GET /roles/:id)
@@ -74,12 +82,7 @@ func (h *RoleHandler) GetByID(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "role not found")
 	}
 
-	resp := roleResponse{
-		ID:          role.ID.String(),
-		Name:        role.Name,
-		Description: role.Description,
-	}
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(http.StatusOK, toRoleResponse(role))
 }
 
 // List (GET /roles)
@@ -91,11 +94,7 @@ func (h *RoleHandler) List(c *echo.Context) error {
 
 	resp := make([]roleResponse, 0, len(roles))
 	for _, role := range roles {
-		resp = append(resp, roleResponse{
-			ID:          role.ID.String(),
-			Name:        role.Name,
-			Description: role.Description,
-		})
+		resp = append(resp, toRoleResponse(role))
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -131,12 +130,7 @@ func (h *RoleHandler) PartialUpdate(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao atualizar perfil")
 	}
 
-	resp := roleResponse{
-		ID:          role.ID.String(),
-		Name:        role.Name,
-		Description: role.Description,
-	}
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(http.StatusOK, toRoleResponse(role))
 }
 
 // Delete (DELETE /roles/:id)

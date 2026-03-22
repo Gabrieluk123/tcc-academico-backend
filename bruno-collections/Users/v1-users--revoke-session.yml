@@ -1,0 +1,15 @@
+info:
+  name: Revoke Session
+  type: http
+  seq: 7
+
+http:
+  method: DELETE
+  url: "{{base_url}}/api/v1/sessions/d193d259-e50c-4f62-96e0-6aaa891cf5bd"
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

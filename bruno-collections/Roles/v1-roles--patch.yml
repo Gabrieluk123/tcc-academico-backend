@@ -1,0 +1,21 @@
+info:
+  name: Partial Update Role
+  type: http
+  seq: 4
+
+http:
+  method: PATCH
+  url: "{{base_url}}/api/v1/roles/e1a2cbd0-a850-4878-be8f-5993628cdb52"
+  body:
+    type: json
+    data: |-
+      {
+        "description": "Permite gerenciar turmas e aulas"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

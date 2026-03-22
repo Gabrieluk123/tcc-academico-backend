@@ -39,6 +39,22 @@ type User struct {
 	UpdatedAt time.Time
 }
 
+type UserListParams struct {
+	Page        int
+	PageSize    int
+	OrderBy     string
+	OrderDir    string // "asc" ou "desc"
+	RoleID      *uuid.UUID
+	IsActive    *bool
+	FirstName   *string
+	LastName    *string
+	Email       *string
+	CreatedAt   *time.Time
+	UpdatedAt   *time.Time
+	DisabledAt  *time.Time
+	IncludeRole bool // quando true, carrega os detalhes da role associada
+}
+
 func (u *User) FullName() string {
 	return u.FirstName + " " + u.LastName
 }
@@ -48,7 +64,7 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*User, error)
 	FindByEmail(ctx context.Context, email string) (*User, error)
 	Update(ctx context.Context, user *User) error
-	List(ctx context.Context) ([]*User, error)
+	List(ctx context.Context, params UserListParams) ([]*User, int, error) // retorna lista, total, erro
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
@@ -65,7 +81,7 @@ type UserUseCase interface {
 	FindUserByID(ctx context.Context, id uuid.UUID) (*User, error)
 	FindUserByEmail(ctx context.Context, email string) (*User, error)
 	UpdateUser(ctx context.Context, user *User) error
-	ListUsers(ctx context.Context) ([]*User, error)
+	ListUsers(ctx context.Context, params UserListParams) ([]*User, int, error)
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 }
 
@@ -75,4 +91,9 @@ type RoleUseCase interface {
 	ListRoles(ctx context.Context) ([]*Role, error)
 	UpdateRole(ctx context.Context, role *Role) error
 	DeleteRole(ctx context.Context, id uuid.UUID) error
+}
+
+type PermissionUseCase interface {
+	ListPermissions(ctx context.Context) ([]*Permission, error)
+	FindPermissionByID(ctx context.Context, id uuid.UUID) (*Permission, error)
 }

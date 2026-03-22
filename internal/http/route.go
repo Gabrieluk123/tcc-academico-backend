@@ -13,17 +13,17 @@ func SetupRoutes(
 	authHandler *handler.AuthHandler,
 	userHandler *handler.UserHandler,
 	roleHandler *handler.RoleHandler,
+	permissionHandler *handler.PermissionHandler,
 	jwtMiddleware echo.MiddlewareFunc,
 	enforcer domain.Enforcer,
 	roleRepo domain.RoleRepository,
 ) {
-	// Public routes — no authentication required.
 	e.POST("/api/v1/login", authHandler.Login)
 
-	// Protected group — every route requires a valid JWT.
 	api := e.Group("/api/v1", jwtMiddleware)
 
-	// Users
+	api.POST("/logout", authHandler.Logout)
+
 	api.POST("/users", userHandler.Create,
 		middleware.RequirePermission(enforcer, roleRepo, "user", "create"))
 	api.GET("/users", userHandler.List,
@@ -35,7 +35,14 @@ func SetupRoutes(
 	api.DELETE("/users/:id", userHandler.Deactivate,
 		middleware.RequirePermission(enforcer, roleRepo, "user", "delete"))
 
-	// Roles
+	// Sessões de usuários
+	api.GET("/users/:id/sessions", authHandler.ListSessions,
+		middleware.RequirePermission(enforcer, roleRepo, "user", "read"))
+	api.DELETE("/users/:id/sessions", authHandler.LogoutAll,
+		middleware.RequirePermission(enforcer, roleRepo, "user", "update"))
+	api.DELETE("/sessions/:id", authHandler.RevokeSession,
+		middleware.RequirePermission(enforcer, roleRepo, "user", "update"))
+
 	api.POST("/roles", roleHandler.Create,
 		middleware.RequirePermission(enforcer, roleRepo, "role", "create"))
 	api.GET("/roles", roleHandler.List,
@@ -46,4 +53,9 @@ func SetupRoutes(
 		middleware.RequirePermission(enforcer, roleRepo, "role", "update"))
 	api.DELETE("/roles/:id", roleHandler.Delete,
 		middleware.RequirePermission(enforcer, roleRepo, "role", "delete"))
+
+	api.GET("/permissions", permissionHandler.List,
+		middleware.RequirePermission(enforcer, roleRepo, "permission", "read"))
+	api.GET("/permissions/:id", permissionHandler.GetByID,
+		middleware.RequirePermission(enforcer, roleRepo, "permission", "read"))
 }

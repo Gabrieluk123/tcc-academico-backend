@@ -28,6 +28,18 @@ func (r *permissionRepository) Create(ctx context.Context, permission *domain.Pe
 	return nil
 }
 
+func (r *permissionRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Permission, error) {
+	var dbPerm PermissionDB
+	err := r.db.WithContext(ctx).First(&dbPerm, "id = ?", id).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar permissão por ID: %w", err)
+	}
+	return dbPerm.ToDomain(), nil
+}
+
 func (r *permissionRepository) FindBySlug(ctx context.Context, slug string) (*domain.Permission, error) {
 	var dbPerm PermissionDB
 	err := r.db.WithContext(ctx).First(&dbPerm, "slug = ?", slug).Error

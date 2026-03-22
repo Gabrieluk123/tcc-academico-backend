@@ -13,19 +13,23 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v5"
 
+	"academico/internal/common"
 	routes "academico/internal/http"
 	"academico/internal/http/handler"
 	"academico/internal/http/middleware"
 	infraAuth "academico/internal/infrastructure/auth"
 	"academico/internal/infrastructure/database"
 	usecaseAuth "academico/internal/usecase/auth"
+
+	echomw "github.com/labstack/echo/v5/middleware"
 )
 
 func main() {
 	// =========================================================================
 	// 1. Configuração do Logger
 	// =========================================================================
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	jsonHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
+	logger := slog.New(common.NewContextHandler(jsonHandler))
 	slog.SetDefault(logger)
 
 	// =========================================================================
@@ -88,6 +92,7 @@ func main() {
 	roleRepo := database.NewRoleRepository(db)
 	userRepo := database.NewUserRepository(db)
 	refreshRepo := database.NewRefreshTokenRepository(db)
+	permissionRepo := database.NewPermissionRepository(db)
 
 	if err := database.SeedAdminRole(db, enforcer); err != nil {
 		slog.Error("falha ao seedar role Admin", slog.String("erro", err.Error()))
@@ -97,7 +102,8 @@ func main() {
 	// B. Inicializa as Regras de Negócio (Use Cases)
 	roleUC := usecaseAuth.NewRoleUseCase(roleRepo)
 	userUC := usecaseAuth.NewUserUseCase(userRepo, hashProvider)
-	authUC := usecaseAuth.NewAuthUseCase(userRepo, tokenGenerator, hashProvider, refreshRepo)
+	authUC := usecaseAuth.NewAuthUseCase(userRepo, tokenGenerator, hashProvider, refreshRepo, 24*time.Hour)
+	permissionUC := usecaseAuth.NewPermissionUseCase(permissionRepo)
 
 	if err := database.SeedSystemAdmin(context.Background(), userUC); err != nil {
 		slog.Error("falha ao seedar usuário admin", slog.String("erro", err.Error()))
@@ -108,11 +114,17 @@ func main() {
 	roleHandler := handler.NewRoleHandler(roleUC)
 	userHandler := handler.NewUserHandler(userUC)
 	authHandler := handler.NewAuthHandler(authUC)
+	permissionHandler := handler.NewPermissionHandler(permissionUC)
 
 	// =========================================================================
 	// 5. Inicialização do Framework Web (Echo v5) e Rotas
 	// =========================================================================
 	e := echo.New()
+
+	// Recover captura panics em qualquer handler e retorna 500 em vez de
+	// derrubar o processo — usa o middleware nativo do Echo v5.
+	e.Use(echomw.Recover())
+	e.Use(middleware.NewRequestIDMiddleware())
 
 	e.GET("/health", func(c *echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{
@@ -121,8 +133,8 @@ func main() {
 		})
 	})
 
-	jwtMW := middleware.NewJWTMiddleware(jwtSecret)
-	routes.SetupRoutes(e, authHandler, userHandler, roleHandler, jwtMW, enforcer, roleRepo)
+	jwtMW := middleware.NewJWTMiddleware(jwtSecret, refreshRepo)
+	routes.SetupRoutes(e, authHandler, userHandler, roleHandler, permissionHandler, jwtMW, enforcer, roleRepo)
 
 	// =========================================================================
 	// 6. Configuração do Servidor HTTP
