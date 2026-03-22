@@ -14,37 +14,39 @@ import (
 	"academico/internal/usecase/auth"
 )
 
+// ── Mocks ────────────────────────────────────────────────────────────────────
+
 type MockUserRepository struct{ mock.Mock }
 
 func (m *MockUserRepository) Create(ctx context.Context, user *domain.User) error {
-	args := m.Called(ctx, user)
-	return args.Error(0)
+	return m.Called(ctx, user).Error(0)
 }
 func (m *MockUserRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	args := m.Called(ctx, id)
-	return args.Get(0).(*domain.User), args.Error(1)
+	if v := args.Get(0); v != nil {
+		return v.(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 func (m *MockUserRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
 	args := m.Called(ctx, email)
-	return args.Get(0).(*domain.User), args.Error(1)
+	if v := args.Get(0); v != nil {
+		return v.(*domain.User), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
-
 func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) error {
-	args := m.Called(ctx, user)
-	return args.Error(0)
+	return m.Called(ctx, user).Error(0)
 }
-
 func (m *MockUserRepository) List(ctx context.Context, params domain.UserListParams) ([]*domain.User, int, error) {
 	args := m.Called(ctx, params)
-	if args.Get(0) != nil {
-		return args.Get(0).([]*domain.User), args.Int(1), args.Error(2)
+	if v := args.Get(0); v != nil {
+		return v.([]*domain.User), args.Int(1), args.Error(2)
 	}
 	return nil, 0, args.Error(2)
 }
-
 func (m *MockUserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
+	return m.Called(ctx, id).Error(0)
 }
 
 type MockTokenGenerator struct{ mock.Mock }
@@ -61,88 +63,49 @@ func (m *MockHashProvider) HashPassword(password string) (string, error) {
 	return args.String(0), args.Error(1)
 }
 func (m *MockHashProvider) CompareHash(hash, password string) error {
-	args := m.Called(hash, password)
-	return args.Error(0)
+	return m.Called(hash, password).Error(0)
 }
 
 type MockRefreshTokenRepository struct{ mock.Mock }
 
 func (m *MockRefreshTokenRepository) Save(ctx context.Context, userID uuid.UUID, token string, expiresIn time.Duration) error {
-	args := m.Called(ctx, userID, token, expiresIn)
-	return args.Error(0)
+	return m.Called(ctx, userID, token, expiresIn).Error(0)
 }
 func (m *MockRefreshTokenRepository) Revoke(ctx context.Context, token string) error {
-	args := m.Called(ctx, token)
-	return args.Error(0)
+	return m.Called(ctx, token).Error(0)
 }
 func (m *MockRefreshTokenRepository) RevokeAll(ctx context.Context, userID uuid.UUID) error {
-	args := m.Called(ctx, userID)
-	return args.Error(0)
+	return m.Called(ctx, userID).Error(0)
+}
+func (m *MockRefreshTokenRepository) FindByToken(ctx context.Context, token string) (*domain.Session, error) {
+	args := m.Called(ctx, token)
+	if v := args.Get(0); v != nil {
+		return v.(*domain.Session), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 func (m *MockRefreshTokenRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Session, error) {
 	args := m.Called(ctx, userID)
-	return args.Get(0).([]domain.Session), args.Error(1)
+	if v := args.Get(0); v != nil {
+		return v.([]domain.Session), args.Error(1)
+	}
+	return nil, args.Error(1)
 }
 func (m *MockRefreshTokenRepository) RevokeByID(ctx context.Context, sessionID string) error {
-	args := m.Called(ctx, sessionID)
-	return args.Error(0)
-}
-func TestLogoutAll_Success(t *testing.T) {
-	ctx := context.Background()
-	refreshRepo := new(MockRefreshTokenRepository)
-	userRepo := new(MockUserRepository)
-	hashProvider := new(MockHashProvider)
-	tokenGen := new(MockTokenGenerator)
-
-	userID := uuid.New()
-	refreshRepo.On("RevokeAll", ctx, userID).Return(nil)
-
-	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
-	err := uc.LogoutAll(ctx, userID)
-
-	assert.NoError(t, err)
-	refreshRepo.AssertCalled(t, "RevokeAll", ctx, userID)
+	return m.Called(ctx, sessionID).Error(0)
 }
 
-func TestListSessions_Success(t *testing.T) {
-	ctx := context.Background()
-	refreshRepo := new(MockRefreshTokenRepository)
-	userRepo := new(MockUserRepository)
-	hashProvider := new(MockHashProvider)
-	tokenGen := new(MockTokenGenerator)
-
-	userID := uuid.New()
-	sessions := []domain.Session{
-		{ID: "sess1", UserID: userID, Token: "token1", Revoked: false},
-		{ID: "sess2", UserID: userID, Token: "token2", Revoked: false},
-	}
-	refreshRepo.On("ListByUser", ctx, userID).Return(sessions, nil)
-
-	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
-	result, err := uc.ListSessions(ctx, userID)
-
-	assert.NoError(t, err)
-	assert.Len(t, result, 2)
-	assert.Equal(t, "sess1", result[0].ID)
-	refreshRepo.AssertCalled(t, "ListByUser", ctx, userID)
+// helper — avoids repetir sessionDuration em cada teste
+func newAuthUC(
+	userRepo *MockUserRepository,
+	tokenGen *MockTokenGenerator,
+	hash *MockHashProvider,
+	repo *MockRefreshTokenRepository,
+) domain.AuthUseCase {
+	return auth.NewAuthUseCase(userRepo, tokenGen, hash, repo, 24*time.Hour)
 }
 
-func TestRevokeSession_Success(t *testing.T) {
-	ctx := context.Background()
-	refreshRepo := new(MockRefreshTokenRepository)
-	userRepo := new(MockUserRepository)
-	hashProvider := new(MockHashProvider)
-	tokenGen := new(MockTokenGenerator)
-
-	sessionID := "sess1"
-	refreshRepo.On("RevokeByID", ctx, sessionID).Return(nil)
-
-	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
-	err := uc.RevokeSession(ctx, sessionID)
-
-	assert.NoError(t, err)
-	refreshRepo.AssertCalled(t, "RevokeByID", ctx, sessionID)
-}
+// ── Login ────────────────────────────────────────────────────────────────────
 
 func TestLogin_Success(t *testing.T) {
 	ctx := context.Background()
@@ -151,20 +114,13 @@ func TestLogin_Success(t *testing.T) {
 	tokenGen := new(MockTokenGenerator)
 	refreshRepo := new(MockRefreshTokenRepository)
 
-	user := &domain.User{
-		ID:           uuid.New(),
-		Email:        "john@email.com",
-		PasswordHash: "hashed",
-		IsActive:     true,
-	}
-
+	user := &domain.User{ID: uuid.New(), Email: "john@email.com", PasswordHash: "hashed", IsActive: true}
 	userRepo.On("FindByEmail", ctx, "john@email.com").Return(user, nil)
 	hashProvider.On("CompareHash", "hashed", "password").Return(nil)
 	tokenGen.On("GenerateToken", ctx, user).Return("token", nil)
 	refreshRepo.On("Save", ctx, user.ID, "token", mock.Anything).Return(nil)
 
-	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
-	token, err := uc.Login(ctx, "john@email.com", "password")
+	token, err := newAuthUC(userRepo, tokenGen, hashProvider, refreshRepo).Login(ctx, "john@email.com", "password")
 
 	assert.NoError(t, err)
 	assert.Equal(t, "token", token)
@@ -173,95 +129,186 @@ func TestLogin_Success(t *testing.T) {
 func TestLogin_EmailNotFound(t *testing.T) {
 	ctx := context.Background()
 	userRepo := new(MockUserRepository)
-	hashProvider := new(MockHashProvider)
-	refreshRepo := new(MockRefreshTokenRepository)
-	tokenGen := new(MockTokenGenerator)
 
-	userRepo.On("FindByEmail", ctx, "notfound@email.com").Return((*domain.User)(nil), errors.New("registro não encontrado no bd"))
+	userRepo.On("FindByEmail", ctx, "notfound@email.com").Return(nil, errors.New("not found"))
 
-	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
-	_, err := uc.Login(ctx, "notfound@email.com", "password")
+	_, err := newAuthUC(userRepo, new(MockTokenGenerator), new(MockHashProvider), new(MockRefreshTokenRepository)).
+		Login(ctx, "notfound@email.com", "password")
 
-	assert.Error(t, err)
 	assert.ErrorIs(t, err, domain.ErrInvalidCredentials)
 }
 
 func TestLogin_UserInactive(t *testing.T) {
 	ctx := context.Background()
 	userRepo := new(MockUserRepository)
-	hashProvider := new(MockHashProvider)
-	refreshRepo := new(MockRefreshTokenRepository)
-	tokenGen := new(MockTokenGenerator)
 
-	user := &domain.User{
-		ID:           uuid.New(),
-		Email:        "inactive@email.com",
-		PasswordHash: "hashed",
-		IsActive:     false,
-	}
-
+	user := &domain.User{ID: uuid.New(), Email: "inactive@email.com", PasswordHash: "hashed", IsActive: false}
 	userRepo.On("FindByEmail", ctx, "inactive@email.com").Return(user, nil)
 
-	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
-	_, err := uc.Login(ctx, "inactive@email.com", "password")
+	_, err := newAuthUC(userRepo, new(MockTokenGenerator), new(MockHashProvider), new(MockRefreshTokenRepository)).
+		Login(ctx, "inactive@email.com", "password")
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "inativo")
+	assert.ErrorIs(t, err, domain.ErrInvalidCredentials)
 }
 
 func TestLogin_WrongPassword(t *testing.T) {
 	ctx := context.Background()
 	userRepo := new(MockUserRepository)
 	hashProvider := new(MockHashProvider)
-	refreshRepo := new(MockRefreshTokenRepository)
-	tokenGen := new(MockTokenGenerator)
 
-	user := &domain.User{
-		ID:           uuid.New(),
-		Email:        "wrongpass@email.com",
-		PasswordHash: "hashed",
-		IsActive:     true,
-	}
-
+	user := &domain.User{ID: uuid.New(), Email: "wrongpass@email.com", PasswordHash: "hashed", IsActive: true}
 	userRepo.On("FindByEmail", ctx, "wrongpass@email.com").Return(user, nil)
-	hashProvider.On("CompareHash", "hashed", "wrong").Return(errors.New("bcrypt hash mismatch"))
+	hashProvider.On("CompareHash", "hashed", "wrong").Return(errors.New("bcrypt mismatch"))
 
-	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
-	_, err := uc.Login(ctx, "wrongpass@email.com", "wrong")
+	_, err := newAuthUC(userRepo, new(MockTokenGenerator), hashProvider, new(MockRefreshTokenRepository)).
+		Login(ctx, "wrongpass@email.com", "wrong")
 
-	assert.Error(t, err)
 	assert.ErrorIs(t, err, domain.ErrInvalidCredentials)
 }
 
-func TestLogout_Success(t *testing.T) {
+func TestLogin_TokenGenerationFail(t *testing.T) {
 	ctx := context.Background()
-	refreshRepo := new(MockRefreshTokenRepository)
 	userRepo := new(MockUserRepository)
 	hashProvider := new(MockHashProvider)
 	tokenGen := new(MockTokenGenerator)
 
+	user := &domain.User{ID: uuid.New(), Email: "u@email.com", PasswordHash: "hashed", IsActive: true}
+	userRepo.On("FindByEmail", ctx, "u@email.com").Return(user, nil)
+	hashProvider.On("CompareHash", "hashed", "pass").Return(nil)
+	tokenGen.On("GenerateToken", ctx, user).Return("", errors.New("signing error"))
+
+	_, err := newAuthUC(userRepo, tokenGen, hashProvider, new(MockRefreshTokenRepository)).
+		Login(ctx, "u@email.com", "pass")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "signing error")
+}
+
+func TestLogin_SaveSessionFail(t *testing.T) {
+	ctx := context.Background()
+	userRepo := new(MockUserRepository)
+	hashProvider := new(MockHashProvider)
+	tokenGen := new(MockTokenGenerator)
+	refreshRepo := new(MockRefreshTokenRepository)
+
+	user := &domain.User{ID: uuid.New(), Email: "u@email.com", PasswordHash: "hashed", IsActive: true}
+	userRepo.On("FindByEmail", ctx, "u@email.com").Return(user, nil)
+	hashProvider.On("CompareHash", "hashed", "pass").Return(nil)
+	tokenGen.On("GenerateToken", ctx, user).Return("token", nil)
+	refreshRepo.On("Save", ctx, user.ID, "token", mock.Anything).Return(errors.New("db error"))
+
+	_, err := newAuthUC(userRepo, tokenGen, hashProvider, refreshRepo).Login(ctx, "u@email.com", "pass")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
+}
+
+// ── Logout ───────────────────────────────────────────────────────────────────
+
+func TestLogout_Success(t *testing.T) {
+	ctx := context.Background()
+	refreshRepo := new(MockRefreshTokenRepository)
 	refreshRepo.On("Revoke", ctx, "token123").Return(nil)
 
-	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
-	err := uc.Logout(ctx, "token123")
+	err := newAuthUC(new(MockUserRepository), new(MockTokenGenerator), new(MockHashProvider), refreshRepo).
+		Logout(ctx, "token123")
 
 	assert.NoError(t, err)
-	refreshRepo.AssertCalled(t, "Revoke", ctx, "token123")
 }
 
 func TestLogout_Fail(t *testing.T) {
 	ctx := context.Background()
 	refreshRepo := new(MockRefreshTokenRepository)
-	userRepo := new(MockUserRepository)
-	hashProvider := new(MockHashProvider)
-	tokenGen := new(MockTokenGenerator)
-
 	refreshRepo.On("Revoke", ctx, "token123").Return(errors.New("db error"))
 
-	uc := auth.NewAuthUseCase(userRepo, tokenGen, hashProvider, refreshRepo)
-	err := uc.Logout(ctx, "token123")
+	err := newAuthUC(new(MockUserRepository), new(MockTokenGenerator), new(MockHashProvider), refreshRepo).
+		Logout(ctx, "token123")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "db error")
-	refreshRepo.AssertCalled(t, "Revoke", ctx, "token123")
+}
+
+// ── LogoutAll ────────────────────────────────────────────────────────────────
+
+func TestLogoutAll_Success(t *testing.T) {
+	ctx := context.Background()
+	refreshRepo := new(MockRefreshTokenRepository)
+	userID := uuid.New()
+	refreshRepo.On("RevokeAll", ctx, userID).Return(nil)
+
+	err := newAuthUC(new(MockUserRepository), new(MockTokenGenerator), new(MockHashProvider), refreshRepo).
+		LogoutAll(ctx, userID)
+
+	assert.NoError(t, err)
+}
+
+func TestLogoutAll_Fail(t *testing.T) {
+	ctx := context.Background()
+	refreshRepo := new(MockRefreshTokenRepository)
+	userID := uuid.New()
+	refreshRepo.On("RevokeAll", ctx, userID).Return(errors.New("db error"))
+
+	err := newAuthUC(new(MockUserRepository), new(MockTokenGenerator), new(MockHashProvider), refreshRepo).
+		LogoutAll(ctx, userID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
+}
+
+// ── ListSessions ─────────────────────────────────────────────────────────────
+
+func TestListSessions_Success(t *testing.T) {
+	ctx := context.Background()
+	refreshRepo := new(MockRefreshTokenRepository)
+	userID := uuid.New()
+	sessions := []domain.Session{
+		{ID: "sess1", UserID: userID, Token: "token1"},
+		{ID: "sess2", UserID: userID, Token: "token2"},
+	}
+	refreshRepo.On("ListByUser", ctx, userID).Return(sessions, nil)
+
+	result, err := newAuthUC(new(MockUserRepository), new(MockTokenGenerator), new(MockHashProvider), refreshRepo).
+		ListSessions(ctx, userID)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.Equal(t, "sess1", result[0].ID)
+}
+
+func TestListSessions_Fail(t *testing.T) {
+	ctx := context.Background()
+	refreshRepo := new(MockRefreshTokenRepository)
+	userID := uuid.New()
+	refreshRepo.On("ListByUser", ctx, userID).Return(nil, errors.New("db error"))
+
+	_, err := newAuthUC(new(MockUserRepository), new(MockTokenGenerator), new(MockHashProvider), refreshRepo).
+		ListSessions(ctx, userID)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
+}
+
+// ── RevokeSession ─────────────────────────────────────────────────────────────
+
+func TestRevokeSession_Success(t *testing.T) {
+	ctx := context.Background()
+	refreshRepo := new(MockRefreshTokenRepository)
+	refreshRepo.On("RevokeByID", ctx, "sess1").Return(nil)
+
+	err := newAuthUC(new(MockUserRepository), new(MockTokenGenerator), new(MockHashProvider), refreshRepo).
+		RevokeSession(ctx, "sess1")
+
+	assert.NoError(t, err)
+}
+
+func TestRevokeSession_Fail(t *testing.T) {
+	ctx := context.Background()
+	refreshRepo := new(MockRefreshTokenRepository)
+	refreshRepo.On("RevokeByID", ctx, "sess1").Return(errors.New("db error"))
+
+	err := newAuthUC(new(MockUserRepository), new(MockTokenGenerator), new(MockHashProvider), refreshRepo).
+		RevokeSession(ctx, "sess1")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
 }
