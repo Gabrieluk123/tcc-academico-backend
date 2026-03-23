@@ -121,6 +121,11 @@ func main() {
 	// =========================================================================
 	e := echo.New()
 
+	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
+		AllowOrigins: []string{"http://localhost:3000"}, // Libera o seu frontend
+		AllowHeaders: []string{"*"},                     // Libera os headers de autenticação e JSON
+	}))
+
 	// Recover captura panics em qualquer handler e retorna 500 em vez de
 	// derrubar o processo — usa o middleware nativo do Echo v5.
 	e.Use(echomw.Recover())

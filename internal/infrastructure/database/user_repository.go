@@ -137,7 +137,8 @@ func (r *userRepository) List(ctx context.Context, params domain.UserListParams)
 
 func (r *userRepository) Update(ctx context.Context, user *domain.User) error {
 	dbUser := FromDomainUser(user)
-	if err := r.db.WithContext(ctx).Model(&UserDB{}).Where("id = ?", user.ID).Updates(dbUser).Error; err != nil {
+	// O Select("*") obriga o GORM a salvar todos os campos da struct, incluindo os 'false' ou vazios
+	if err := r.db.WithContext(ctx).Model(&UserDB{}).Where("id = ?", user.ID).Select("*").Updates(dbUser).Error; err != nil {
 		return fmt.Errorf("erro ao atualizar usuário: %w", err)
 	}
 	return nil
