@@ -83,11 +83,3 @@ func (c *casbinEnforcer) RemovePolicy(_ context.Context, roleName, resource, act
 	}
 	return removed, nil
 }
-
-func (c *casbinEnforcer) RemoveAllPoliciesForRole(_ context.Context, roleName string) error {
-	_, err := c.e.RemoveFilteredPolicy(0, roleName)
-	if err != nil {
-		return fmt.Errorf("erro ao remover policies do perfil: %w", err)
-	}
-	return nil
-}

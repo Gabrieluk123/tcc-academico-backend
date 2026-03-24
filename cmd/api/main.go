@@ -100,7 +100,7 @@ func main() {
 	}
 
 	// B. Inicializa as Regras de Negócio (Use Cases)
-	roleUC := usecaseAuth.NewRoleUseCase(roleRepo, permissionRepo, userRepo, enforcer)
+	roleUC := usecaseAuth.NewRoleUseCase(roleRepo, permissionRepo, userRepo)
 	userUC := usecaseAuth.NewUserUseCase(userRepo, hashProvider, permissionRepo)
 	authUC := usecaseAuth.NewAuthUseCase(userRepo, tokenGenerator, hashProvider, refreshRepo, 24*time.Hour)
 	permissionUC := usecaseAuth.NewPermissionUseCase(permissionRepo)
