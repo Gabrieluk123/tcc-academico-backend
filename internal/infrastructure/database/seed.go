@@ -31,6 +31,10 @@ var catalogPermissions = []PermissionDB{
 	// Permissions module (for the admin UI that assigns permissions to roles)
 	{ID: uuid.MustParse("01960000-0000-7000-a000-000000000020"), Slug: "permission:read", Description: "Listar permissões disponíveis"},
 	{ID: uuid.MustParse("01960000-0000-7000-a000-000000000021"), Slug: "permission:assign", Description: "Atribuir permissões a perfis"},
+
+	// Sessions module
+	{ID: uuid.MustParse("01960000-0000-7000-a000-000000000030"), Slug: "session:read", Description: "Visualizar sessões ativas"},
+	{ID: uuid.MustParse("01960000-0000-7000-a000-000000000031"), Slug: "session:revoke", Description: "Revogar sessões de usuários"},
 }
 
 // SeedPermissions inserts the permission catalog into the database idempotently.

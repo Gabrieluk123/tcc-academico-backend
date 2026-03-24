@@ -50,14 +50,15 @@ type userResponse struct {
 }
 
 type roleInUserResponse struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          string                      `json:"id"`
+	Name        string                      `json:"name"`
+	Description string                      `json:"description"`
+	Permissions []*permissionInRoleResponse `json:"permissions,omitempty"`
+	CreatedAt   time.Time                   `json:"created_at"`
+	UpdatedAt   time.Time                   `json:"updated_at"`
 }
 
-func toUserResponse(user *domain.User, includeRole bool) userResponse {
+func toUserResponse(user *domain.User, includeRole bool, includePermissions bool) userResponse {
 	resp := userResponse{
 		ID:        user.ID.String(),
 		FirstName: user.FirstName,
@@ -69,13 +70,24 @@ func toUserResponse(user *domain.User, includeRole bool) userResponse {
 		UpdatedAt: user.UpdatedAt,
 	}
 	if includeRole && user.Role != nil {
-		resp.Role = &roleInUserResponse{
+		roleResp := &roleInUserResponse{
 			ID:          user.Role.ID.String(),
 			Name:        user.Role.Name,
 			Description: user.Role.Description,
 			CreatedAt:   user.Role.CreatedAt,
 			UpdatedAt:   user.Role.UpdatedAt,
 		}
+		if includePermissions && len(user.Role.Permissions) > 0 {
+			roleResp.Permissions = make([]*permissionInRoleResponse, 0, len(user.Role.Permissions))
+			for _, p := range user.Role.Permissions {
+				roleResp.Permissions = append(roleResp.Permissions, &permissionInRoleResponse{
+					ID:          p.ID.String(),
+					Slug:        p.Slug,
+					Description: p.Description,
+				})
+			}
+		}
+		resp.Role = roleResp
 	}
 	return resp
 }
@@ -117,7 +129,7 @@ func (h *UserHandler) Create(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create user")
 	}
 
-	return c.JSON(http.StatusCreated, toUserResponse(user, false))
+	return c.JSON(http.StatusCreated, toUserResponse(user, false, false))
 }
 
 // GetByID (GET /users/:id)
@@ -128,13 +140,13 @@ func (h *UserHandler) GetByID(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid id")
 	}
 
-	user, err := h.userUseCase.FindUserByID(c.Request().Context(), id)
+	includes := parseIncludes(c)
+	user, err := h.userUseCase.FindUserByID(c.Request().Context(), id, includes["permissions"])
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "user not found")
 	}
 
-	includes := parseIncludes(c)
-	return c.JSON(http.StatusOK, toUserResponse(user, includes["role"]))
+	return c.JSON(http.StatusOK, toUserResponse(user, includes["role"], includes["permissions"]))
 }
 
 // List (GET /users)
@@ -192,7 +204,9 @@ func (h *UserHandler) List(c *echo.Context) error {
 			params.DisabledAt = &t
 		}
 	}
-	params.IncludeRole = parseIncludes(c)["role"]
+	includes := parseIncludes(c)
+	params.IncludeRole = includes["role"]
+	params.IncludePermissions = includes["permissions"]
 
 	users, total, err := h.userUseCase.ListUsers(ctx, params)
 	if err != nil {
@@ -200,9 +214,8 @@ func (h *UserHandler) List(c *echo.Context) error {
 	}
 
 	resp := make([]userResponse, 0, len(users))
-	includes := parseIncludes(c)
 	for _, user := range users {
-		resp = append(resp, toUserResponse(user, includes["role"]))
+		resp = append(resp, toUserResponse(user, params.IncludeRole, params.IncludePermissions))
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"items":     resp,
@@ -232,7 +245,7 @@ func (h *UserHandler) PartialUpdate(c *echo.Context) error {
 
 	ctx := c.Request().Context()
 
-	user, err := h.userUseCase.FindUserByID(ctx, id)
+	user, err := h.userUseCase.FindUserByID(ctx, id, false)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "user not found")
 	}
@@ -257,7 +270,7 @@ func (h *UserHandler) PartialUpdate(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to update user")
 	}
 
-	return c.JSON(http.StatusOK, toUserResponse(user, false))
+	return c.JSON(http.StatusOK, toUserResponse(user, false, false))
 }
 
 // Deactivate (DELETE /users/:id)
@@ -270,6 +283,68 @@ func (h *UserHandler) Deactivate(c *echo.Context) error {
 
 	if err := h.userUseCase.DeleteUser(c.Request().Context(), id); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao inativar usuário")
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+// currentUserID extracts the authenticated user's UUID from the Echo context.
+func currentUserID(c *echo.Context) (uuid.UUID, error) {
+	raw, ok := c.Get("user_id").(string)
+	if !ok || raw == "" {
+		return uuid.Nil, echo.NewHTTPError(http.StatusUnauthorized, "não autenticado")
+	}
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, echo.NewHTTPError(http.StatusUnauthorized, "identificador de usuário inválido no token")
+	}
+	return id, nil
+}
+
+// Me (GET /users/me)
+func (h *UserHandler) Me(c *echo.Context) error {
+	id, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+
+	includes := parseIncludes(c)
+	user, err := h.userUseCase.FindUserByID(c.Request().Context(), id, includes["permissions"])
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao buscar usuário")
+	}
+	if user == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "usuário não encontrado")
+	}
+
+	return c.JSON(http.StatusOK, toUserResponse(user, includes["role"], includes["permissions"]))
+}
+
+type changePasswordRequest struct {
+	OldPassword string `json:"old_password"`
+	NewPassword string `json:"new_password"`
+}
+
+// ChangePassword (PATCH /users/me/password)
+func (h *UserHandler) ChangePassword(c *echo.Context) error {
+	id, err := currentUserID(c)
+	if err != nil {
+		return err
+	}
+
+	var req changePasswordRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "dados inválidos")
+	}
+	if req.OldPassword == "" || req.NewPassword == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "old_password e new_password são obrigatórios")
+	}
+
+	if err := h.userUseCase.ChangePassword(c.Request().Context(), id, req.OldPassword, req.NewPassword); err != nil {
+		if err == domain.ErrInvalidCredentials {
+			return echo.NewHTTPError(http.StatusUnauthorized, "senha atual incorreta")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao alterar senha")
 	}
 
 	return c.NoContent(http.StatusNoContent)

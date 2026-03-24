@@ -12,13 +12,14 @@ import (
 )
 
 type roleRepository struct {
-	db *gorm.DB
+	db       *gorm.DB
+	permRepo *permissionRepository
 }
 
 var _ domain.RoleRepository = (*roleRepository)(nil)
 
-func NewRoleRepository(db *gorm.DB) *roleRepository {
-	return &roleRepository{db: db}
+func NewRoleRepository(db *gorm.DB, permRepo *permissionRepository) *roleRepository {
+	return &roleRepository{db: db, permRepo: permRepo}
 }
 
 func (r *roleRepository) Create(ctx context.Context, role *domain.Role) error {
@@ -41,16 +42,56 @@ func (r *roleRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Ro
 	return dbRole.ToDomain(), nil
 }
 
-func (r *roleRepository) List(ctx context.Context) ([]*domain.Role, error) {
-	var dbRoles []RoleDB
-	if err := r.db.WithContext(ctx).Find(&dbRoles).Error; err != nil {
-		return nil, fmt.Errorf("erro ao listar perfis: %w", err)
+func (r *roleRepository) List(ctx context.Context, params domain.RoleListParams) ([]*domain.Role, int, error) {
+	db := r.db.WithContext(ctx).Model(&RoleDB{})
+
+	if params.Name != nil {
+		db = db.Where("name ILIKE ?", "%"+*params.Name+"%")
 	}
+
+	var total int64
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("erro ao contar perfis: %w", err)
+	}
+
+	page := params.Page
+	pageSize := params.PageSize
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 25
+	}
+	offset := (page - 1) * pageSize
+
+	allowedOrderBy := map[string]bool{"id": true, "name": true, "created_at": true, "updated_at": true}
+	orderBy := params.OrderBy
+	orderDir := params.OrderDir
+	if !allowedOrderBy[orderBy] {
+		orderBy = "name"
+	}
+	if orderDir != "asc" && orderDir != "desc" {
+		orderDir = "asc"
+	}
+
+	var dbRoles []RoleDB
+	if err := db.Offset(offset).Limit(pageSize).Order(orderBy + " " + orderDir).Find(&dbRoles).Error; err != nil {
+		return nil, 0, fmt.Errorf("erro ao listar perfis: %w", err)
+	}
+
 	roles := make([]*domain.Role, 0, len(dbRoles))
 	for _, dbRole := range dbRoles {
-		roles = append(roles, dbRole.ToDomain())
+		role := dbRole.ToDomain()
+		if params.IncludePermissions {
+			perms, err := r.permRepo.ListByRoleName(ctx, dbRole.Name)
+			if err != nil {
+				return nil, 0, fmt.Errorf("erro ao buscar permissões do perfil %s: %w", dbRole.Name, err)
+			}
+			role.Permissions = perms
+		}
+		roles = append(roles, role)
 	}
-	return roles, nil
+	return roles, int(total), nil
 }
 
 func (r *roleRepository) Update(ctx context.Context, role *domain.Role) error {

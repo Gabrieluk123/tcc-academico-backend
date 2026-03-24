@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
 	"academico/internal/domain"
 
@@ -28,7 +30,22 @@ type permissionResponse struct {
 // List (GET /permissions)
 func (h *PermissionHandler) List(c *echo.Context) error {
 	ctx := c.Request().Context()
-	permissions, err := h.useCase.ListPermissions(ctx)
+	params := domain.PermissionListParams{}
+
+	if page := c.QueryParam("page"); page != "" {
+		fmt.Sscanf(page, "%d", &params.Page)
+	}
+	if pageSize := c.QueryParam("page_size"); pageSize != "" {
+		fmt.Sscanf(pageSize, "%d", &params.PageSize)
+	}
+	params.OrderBy = c.QueryParam("order_by")
+	params.OrderDir = c.QueryParam("order_dir")
+	if slug := c.QueryParam("slug"); slug != "" {
+		s := strings.TrimSpace(slug)
+		params.Slug = &s
+	}
+
+	permissions, total, err := h.useCase.ListPermissions(ctx, params)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to list permissions")
 	}
@@ -44,8 +61,10 @@ func (h *PermissionHandler) List(c *echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"items": resp,
-		"total": len(resp),
+		"items":     resp,
+		"total":     total,
+		"page":      params.Page,
+		"page_size": params.PageSize,
 	})
 }
 

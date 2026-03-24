@@ -89,10 +89,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	roleRepo := database.NewRoleRepository(db)
-	userRepo := database.NewUserRepository(db)
-	refreshRepo := database.NewRefreshTokenRepository(db)
 	permissionRepo := database.NewPermissionRepository(db)
+	roleRepo := database.NewRoleRepository(db, permissionRepo)
+	userRepo := database.NewUserRepository(db, permissionRepo)
+	refreshRepo := database.NewRefreshTokenRepository(db)
 
 	if err := database.SeedAdminRole(db, enforcer); err != nil {
 		slog.Error("falha ao seedar role Admin", slog.String("erro", err.Error()))
@@ -100,8 +100,8 @@ func main() {
 	}
 
 	// B. Inicializa as Regras de Negócio (Use Cases)
-	roleUC := usecaseAuth.NewRoleUseCase(roleRepo)
-	userUC := usecaseAuth.NewUserUseCase(userRepo, hashProvider)
+	roleUC := usecaseAuth.NewRoleUseCase(roleRepo, permissionRepo, userRepo, enforcer)
+	userUC := usecaseAuth.NewUserUseCase(userRepo, hashProvider, permissionRepo)
 	authUC := usecaseAuth.NewAuthUseCase(userRepo, tokenGenerator, hashProvider, refreshRepo, 24*time.Hour)
 	permissionUC := usecaseAuth.NewPermissionUseCase(permissionRepo)
 
@@ -122,8 +122,9 @@ func main() {
 	e := echo.New()
 
 	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
-		AllowOrigins: []string{"http://localhost:3000"}, // Libera o seu frontend
-		AllowHeaders: []string{"*"},                     // Libera os headers de autenticação e JSON
+		AllowOrigins: []string{"http://localhost:3000"},
+		AllowHeaders: []string{"Authorization", "Content-Type", "Accept", "X-Request-ID"},
+		AllowMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 	}))
 
 	// Recover captura panics em qualquer handler e retorna 500 em vez de

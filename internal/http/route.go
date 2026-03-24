@@ -26,6 +26,8 @@ func SetupRoutes(
 
 	api.POST("/users", userHandler.Create,
 		middleware.RequirePermission(enforcer, roleRepo, "user", "create"))
+	api.GET("/users/me", userHandler.Me)
+	api.PATCH("/users/me/password", userHandler.ChangePassword)
 	api.GET("/users", userHandler.List,
 		middleware.RequirePermission(enforcer, roleRepo, "user", "read"))
 	api.GET("/users/:id", userHandler.GetByID,
@@ -37,11 +39,11 @@ func SetupRoutes(
 
 	// Sessões de usuários
 	api.GET("/users/:id/sessions", authHandler.ListSessions,
-		middleware.RequirePermission(enforcer, roleRepo, "user", "read"))
+		middleware.RequirePermission(enforcer, roleRepo, "session", "read"))
 	api.DELETE("/users/:id/sessions", authHandler.LogoutAll,
-		middleware.RequirePermission(enforcer, roleRepo, "user", "update"))
+		middleware.RequirePermission(enforcer, roleRepo, "session", "revoke"))
 	api.DELETE("/sessions/:id", authHandler.RevokeSession,
-		middleware.RequirePermission(enforcer, roleRepo, "user", "update"))
+		middleware.RequirePermission(enforcer, roleRepo, "session", "revoke"))
 
 	api.POST("/roles", roleHandler.Create,
 		middleware.RequirePermission(enforcer, roleRepo, "role", "create"))
@@ -50,6 +52,8 @@ func SetupRoutes(
 	api.GET("/roles/:id", roleHandler.GetByID,
 		middleware.RequirePermission(enforcer, roleRepo, "role", "read"))
 	api.PATCH("/roles/:id", roleHandler.PartialUpdate,
+		middleware.RequirePermission(enforcer, roleRepo, "role", "update"))
+	api.PATCH("/roles/:id/users", roleHandler.ReassignUsers,
 		middleware.RequirePermission(enforcer, roleRepo, "role", "update"))
 	api.DELETE("/roles/:id", roleHandler.Delete,
 		middleware.RequirePermission(enforcer, roleRepo, "role", "delete"))

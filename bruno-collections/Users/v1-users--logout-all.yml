@@ -1,7 +1,7 @@
 info:
   name: Logout All Sessions
   type: http
-  seq: 8
+  seq: 9
 
 http:
   method: DELETE

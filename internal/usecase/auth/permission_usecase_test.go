@@ -32,8 +32,15 @@ func (m *mockPermissionRepo) FindBySlug(ctx context.Context, slug string) (*doma
 	}
 	return nil, args.Error(1)
 }
-func (m *mockPermissionRepo) List(ctx context.Context) ([]*domain.Permission, error) {
-	args := m.Called(ctx)
+func (m *mockPermissionRepo) List(ctx context.Context, params domain.PermissionListParams) ([]*domain.Permission, int, error) {
+	args := m.Called(ctx, params)
+	if v := args.Get(0); v != nil {
+		return v.([]*domain.Permission), args.Int(1), args.Error(2)
+	}
+	return nil, 0, args.Error(2)
+}
+func (m *mockPermissionRepo) ListByRoleName(ctx context.Context, roleName string) ([]*domain.Permission, error) {
+	args := m.Called(ctx, roleName)
 	if v := args.Get(0); v != nil {
 		return v.([]*domain.Permission), args.Error(1)
 	}
@@ -53,12 +60,14 @@ func TestListPermissions_Success(t *testing.T) {
 		{ID: uuid.New(), Slug: "user:create", Description: "Criar usuários"},
 		{ID: uuid.New(), Slug: "user:read", Description: "Visualizar usuários"},
 	}
-	repo.On("List", ctx).Return(perms, nil)
+	params := domain.PermissionListParams{}
+	repo.On("List", ctx, params).Return(perms, 2, nil)
 
-	result, err := auth.NewPermissionUseCase(repo).ListPermissions(ctx)
+	result, total, err := auth.NewPermissionUseCase(repo).ListPermissions(ctx, params)
 
 	assert.NoError(t, err)
 	assert.Len(t, result, 2)
+	assert.Equal(t, 2, total)
 	assert.Equal(t, "user:create", result[0].Slug)
 }
 
@@ -66,9 +75,10 @@ func TestListPermissions_Fail(t *testing.T) {
 	ctx := context.Background()
 	repo := new(mockPermissionRepo)
 
-	repo.On("List", ctx).Return(nil, errors.New("db error"))
+	params := domain.PermissionListParams{}
+	repo.On("List", ctx, params).Return(nil, 0, errors.New("db error"))
 
-	_, err := auth.NewPermissionUseCase(repo).ListPermissions(ctx)
+	_, _, err := auth.NewPermissionUseCase(repo).ListPermissions(ctx, params)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "db error")

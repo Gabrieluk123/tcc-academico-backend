@@ -12,6 +12,7 @@ var (
 	ErrInvalidCredentials = errors.New("e-mail ou senha inválidos")
 	ErrForbidden          = errors.New("acesso negado ao recurso")
 	ErrSessionNotFound    = errors.New("sessão não encontrada")
+	ErrRoleInUse          = errors.New("perfil está em uso por usuários: informe new_role_id para reatribuí-los")
 )
 
 type AuthUseCase interface {
@@ -57,6 +58,7 @@ type Enforcer interface {
 	Enforce(ctx context.Context, roleName, resource, action string) (bool, error)
 	AddPolicy(ctx context.Context, roleName, resource, action string) (bool, error)
 	RemovePolicy(ctx context.Context, roleName, resource, action string) (bool, error)
+	RemoveAllPoliciesForRole(ctx context.Context, roleName string) error
 }
 
 // PermissionRepository is the catalog of available permissions that can be
@@ -65,6 +67,7 @@ type PermissionRepository interface {
 	Create(ctx context.Context, permission *Permission) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Permission, error)
 	FindBySlug(ctx context.Context, slug string) (*Permission, error)
-	List(ctx context.Context) ([]*Permission, error)
+	List(ctx context.Context, params PermissionListParams) ([]*Permission, int, error)
+	ListByRoleName(ctx context.Context, roleName string) ([]*Permission, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }

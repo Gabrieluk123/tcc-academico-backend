@@ -13,13 +13,14 @@ import (
 )
 
 type userRepository struct {
-	db *gorm.DB
+	db       *gorm.DB
+	permRepo *permissionRepository
 }
 
 var _ domain.UserRepository = (*userRepository)(nil)
 
-func NewUserRepository(db *gorm.DB) *userRepository {
-	return &userRepository{db: db}
+func NewUserRepository(db *gorm.DB, permRepo *permissionRepository) *userRepository {
+	return &userRepository{db: db, permRepo: permRepo}
 }
 
 func (r *userRepository) Create(ctx context.Context, user *domain.User) error {
@@ -40,6 +41,34 @@ func (r *userRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Us
 		return nil, fmt.Errorf("erro ao buscar usuário: %w", err)
 	}
 	return dbUser.ToDomain(), nil
+}
+
+// findAndAttachPermissions loads role permissions into the given domain users
+// when IncludePermissions is requested. It is a best-effort enrichment: if the
+// role has no Casbin policies the permissions slice will simply be empty.
+func (r *userRepository) attachPermissions(ctx context.Context, users []*domain.User) error {
+	// Build a de-duplicated set of role names that need resolution.
+	roleNames := make(map[string]bool)
+	for _, u := range users {
+		if u.Role != nil {
+			roleNames[u.Role.Name] = true
+		}
+	}
+	// Fetch permissions per role name and build a lookup.
+	cache := make(map[string][]*domain.Permission)
+	for name := range roleNames {
+		perms, err := r.permRepo.ListByRoleName(ctx, name)
+		if err != nil {
+			return fmt.Errorf("erro ao buscar permissões da role %s: %w", name, err)
+		}
+		cache[name] = perms
+	}
+	for _, u := range users {
+		if u.Role != nil {
+			u.Role.Permissions = cache[u.Role.Name]
+		}
+	}
+	return nil
 }
 
 func (r *userRepository) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
@@ -132,6 +161,11 @@ func (r *userRepository) List(ctx context.Context, params domain.UserListParams)
 	for _, dbUser := range dbUsers {
 		users = append(users, dbUser.ToDomain())
 	}
+	if params.IncludePermissions && params.IncludeRole {
+		if err := r.attachPermissions(ctx, users); err != nil {
+			return nil, 0, err
+		}
+	}
 	return users, int(total), nil
 }
 
@@ -153,6 +187,23 @@ func (r *userRepository) Delete(ctx context.Context, id uuid.UUID) error {
 			"disabled_at": &now,
 		}).Error; err != nil {
 		return fmt.Errorf("erro ao desativar usuário: %w", err)
+	}
+	return nil
+}
+
+func (r *userRepository) CountByRoleID(ctx context.Context, roleID uuid.UUID) (int, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&UserDB{}).Where("role_id = ?", roleID).Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("erro ao contar usuários com o perfil: %w", err)
+	}
+	return int(count), nil
+}
+
+func (r *userRepository) BulkUpdateRoleID(ctx context.Context, oldRoleID, newRoleID uuid.UUID) error {
+	if err := r.db.WithContext(ctx).Model(&UserDB{}).
+		Where("role_id = ?", oldRoleID).
+		Update("role_id", newRoleID).Error; err != nil {
+		return fmt.Errorf("erro ao reatribuir perfil dos usuários: %w", err)
 	}
 	return nil
 }

@@ -20,13 +20,13 @@ func NewPermissionUseCase(repo domain.PermissionRepository) domain.PermissionUse
 	return &permissionUseCase{repo: repo}
 }
 
-func (uc *permissionUseCase) ListPermissions(ctx context.Context) ([]*domain.Permission, error) {
-	permissions, err := uc.repo.List(ctx)
+func (uc *permissionUseCase) ListPermissions(ctx context.Context, params domain.PermissionListParams) ([]*domain.Permission, int, error) {
+	permissions, total, err := uc.repo.List(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "falha ao listar permissões", slog.String("error", err.Error()))
-		return nil, fmt.Errorf("erro ao listar permissões: %w", err)
+		return nil, 0, fmt.Errorf("erro ao listar permissões: %w", err)
 	}
-	return permissions, nil
+	return permissions, total, nil
 }
 
 func (uc *permissionUseCase) FindPermissionByID(ctx context.Context, id uuid.UUID) (*domain.Permission, error) {
