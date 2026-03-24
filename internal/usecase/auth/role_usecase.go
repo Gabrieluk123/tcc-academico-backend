@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"academico/internal/domain"
 
@@ -142,6 +143,52 @@ func (r *roleUseCase) DeleteRole(ctx context.Context, id uuid.UUID) error {
 	}
 	slog.InfoContext(ctx, "perfil excluído com sucesso",
 		slog.String("role_id", id.String()),
+	)
+	return nil
+}
+
+func (r *roleUseCase) SetRolePermissions(ctx context.Context, roleID uuid.UUID, permissionIDs []uuid.UUID) error {
+	role, err := r.repo.FindByID(ctx, roleID)
+	if err != nil {
+		return fmt.Errorf("erro ao buscar perfil: %w", err)
+	}
+	if role == nil {
+		return nil
+	}
+
+	if err := r.enforcer.RemoveAllPoliciesForRole(ctx, role.Name); err != nil {
+		slog.ErrorContext(ctx, "falha ao remover policies do perfil",
+			slog.String("role_id", roleID.String()),
+			slog.String("error", err.Error()),
+		)
+		return fmt.Errorf("erro ao limpar permissões do perfil: %w", err)
+	}
+
+	for _, permID := range permissionIDs {
+		perm, err := r.permRepo.FindByID(ctx, permID)
+		if err != nil {
+			return fmt.Errorf("erro ao buscar permissão %s: %w", permID, err)
+		}
+		if perm == nil {
+			return fmt.Errorf("permissão %s não encontrada", permID)
+		}
+		parts := strings.SplitN(perm.Slug, ":", 2)
+		if len(parts) != 2 {
+			return fmt.Errorf("slug de permissão inválido: %s", perm.Slug)
+		}
+		if _, err := r.enforcer.AddPolicy(ctx, role.Name, parts[0], parts[1]); err != nil {
+			slog.ErrorContext(ctx, "falha ao adicionar policy",
+				slog.String("role_id", roleID.String()),
+				slog.String("slug", perm.Slug),
+				slog.String("error", err.Error()),
+			)
+			return fmt.Errorf("erro ao atribuir permissão %s: %w", perm.Slug, err)
+		}
+	}
+
+	slog.InfoContext(ctx, "permissões do perfil atualizadas",
+		slog.String("role_id", roleID.String()),
+		slog.Int("permissions_count", len(permissionIDs)),
 	)
 	return nil
 }

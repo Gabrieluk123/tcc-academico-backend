@@ -117,16 +117,38 @@ func (m *mockUserRepoForRole) BulkUpdateRoleID(ctx context.Context, oldRoleID, n
 	return m.Called(ctx, oldRoleID, newRoleID).Error(0)
 }
 
+type mockEnforcerForRole struct{ mock.Mock }
+
+func (m *mockEnforcerForRole) Enforce(ctx context.Context, roleName, resource, action string) (bool, error) {
+	args := m.Called(ctx, roleName, resource, action)
+	return args.Bool(0), args.Error(1)
+}
+func (m *mockEnforcerForRole) AddPolicy(ctx context.Context, roleName, resource, action string) (bool, error) {
+	args := m.Called(ctx, roleName, resource, action)
+	return args.Bool(0), args.Error(1)
+}
+func (m *mockEnforcerForRole) RemovePolicy(ctx context.Context, roleName, resource, action string) (bool, error) {
+	args := m.Called(ctx, roleName, resource, action)
+	return args.Bool(0), args.Error(1)
+}
+func (m *mockEnforcerForRole) RemoveAllPoliciesForRole(ctx context.Context, roleName string) error {
+	return m.Called(ctx, roleName).Error(0)
+}
+
 func newRoleUC(roleRepo *mockRoleRepo) domain.RoleUseCase {
-	return auth.NewRoleUseCase(roleRepo, new(mockPermRepoForRole), new(mockUserRepoForRole))
+	return auth.NewRoleUseCase(roleRepo, new(mockPermRepoForRole), new(mockUserRepoForRole), new(mockEnforcerForRole))
 }
 
 func newRoleUCWithPerm(roleRepo *mockRoleRepo, permRepo *mockPermRepoForRole) domain.RoleUseCase {
-	return auth.NewRoleUseCase(roleRepo, permRepo, new(mockUserRepoForRole))
+	return auth.NewRoleUseCase(roleRepo, permRepo, new(mockUserRepoForRole), new(mockEnforcerForRole))
 }
 
 func newRoleUCWithUser(roleRepo *mockRoleRepo, userRepo *mockUserRepoForRole) domain.RoleUseCase {
-	return auth.NewRoleUseCase(roleRepo, new(mockPermRepoForRole), userRepo)
+	return auth.NewRoleUseCase(roleRepo, new(mockPermRepoForRole), userRepo, new(mockEnforcerForRole))
+}
+
+func newRoleUCWithEnforcer(roleRepo *mockRoleRepo, permRepo *mockPermRepoForRole, enforcer *mockEnforcerForRole) domain.RoleUseCase {
+	return auth.NewRoleUseCase(roleRepo, permRepo, new(mockUserRepoForRole), enforcer)
 }
 
 // ── CreateRole ────────────────────────────────────────────────────────────────
@@ -363,4 +385,130 @@ func TestReassignUsers_BulkFail(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "db error")
+}
+
+// ── SetRolePermissions ───────────────────────────────────────────────────────────────
+
+func TestSetRolePermissions_Success(t *testing.T) {
+	ctx := context.Background()
+	roleRepo := new(mockRoleRepo)
+	permRepo := new(mockPermRepoForRole)
+	enforcer := new(mockEnforcerForRole)
+
+	roleID := uuid.New()
+	permID := uuid.New()
+	role := &domain.Role{ID: roleID, Name: "Professor"}
+	perm := &domain.Permission{ID: permID, Slug: "user:read"}
+
+	roleRepo.On("FindByID", ctx, roleID).Return(role, nil)
+	enforcer.On("RemoveAllPoliciesForRole", ctx, "Professor").Return(nil)
+	permRepo.On("FindByID", ctx, permID).Return(perm, nil)
+	enforcer.On("AddPolicy", ctx, "Professor", "user", "read").Return(true, nil)
+
+	err := newRoleUCWithEnforcer(roleRepo, permRepo, enforcer).SetRolePermissions(ctx, roleID, []uuid.UUID{permID})
+
+	assert.NoError(t, err)
+	enforcer.AssertCalled(t, "RemoveAllPoliciesForRole", ctx, "Professor")
+	enforcer.AssertCalled(t, "AddPolicy", ctx, "Professor", "user", "read")
+}
+
+func TestSetRolePermissions_EmptyList(t *testing.T) {
+	ctx := context.Background()
+	roleRepo := new(mockRoleRepo)
+	permRepo := new(mockPermRepoForRole)
+	enforcer := new(mockEnforcerForRole)
+
+	roleID := uuid.New()
+	role := &domain.Role{ID: roleID, Name: "Professor"}
+
+	roleRepo.On("FindByID", ctx, roleID).Return(role, nil)
+	enforcer.On("RemoveAllPoliciesForRole", ctx, "Professor").Return(nil)
+
+	err := newRoleUCWithEnforcer(roleRepo, permRepo, enforcer).SetRolePermissions(ctx, roleID, []uuid.UUID{})
+
+	assert.NoError(t, err)
+	enforcer.AssertCalled(t, "RemoveAllPoliciesForRole", ctx, "Professor")
+	enforcer.AssertNotCalled(t, "AddPolicy")
+}
+
+func TestSetRolePermissions_RoleNotFound(t *testing.T) {
+	ctx := context.Background()
+	roleRepo := new(mockRoleRepo)
+
+	roleID := uuid.New()
+	roleRepo.On("FindByID", ctx, roleID).Return(nil, nil)
+
+	err := newRoleUC(roleRepo).SetRolePermissions(ctx, roleID, []uuid.UUID{uuid.New()})
+
+	assert.NoError(t, err) // nil role → noop, sem erro
+}
+
+func TestSetRolePermissions_RoleFetchFail(t *testing.T) {
+	ctx := context.Background()
+	roleRepo := new(mockRoleRepo)
+
+	roleID := uuid.New()
+	roleRepo.On("FindByID", ctx, roleID).Return(nil, errors.New("db error"))
+
+	err := newRoleUC(roleRepo).SetRolePermissions(ctx, roleID, []uuid.UUID{})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
+}
+
+func TestSetRolePermissions_RemoveFail(t *testing.T) {
+	ctx := context.Background()
+	roleRepo := new(mockRoleRepo)
+	permRepo := new(mockPermRepoForRole)
+	enforcer := new(mockEnforcerForRole)
+
+	roleID := uuid.New()
+	role := &domain.Role{ID: roleID, Name: "Professor"}
+	roleRepo.On("FindByID", ctx, roleID).Return(role, nil)
+	enforcer.On("RemoveAllPoliciesForRole", ctx, "Professor").Return(errors.New("casbin error"))
+
+	err := newRoleUCWithEnforcer(roleRepo, permRepo, enforcer).SetRolePermissions(ctx, roleID, []uuid.UUID{uuid.New()})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "casbin error")
+}
+
+func TestSetRolePermissions_PermNotFound(t *testing.T) {
+	ctx := context.Background()
+	roleRepo := new(mockRoleRepo)
+	permRepo := new(mockPermRepoForRole)
+	enforcer := new(mockEnforcerForRole)
+
+	roleID := uuid.New()
+	permID := uuid.New()
+	role := &domain.Role{ID: roleID, Name: "Professor"}
+	roleRepo.On("FindByID", ctx, roleID).Return(role, nil)
+	enforcer.On("RemoveAllPoliciesForRole", ctx, "Professor").Return(nil)
+	permRepo.On("FindByID", ctx, permID).Return(nil, nil)
+
+	err := newRoleUCWithEnforcer(roleRepo, permRepo, enforcer).SetRolePermissions(ctx, roleID, []uuid.UUID{permID})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "não encontrada")
+}
+
+func TestSetRolePermissions_AddPolicyFail(t *testing.T) {
+	ctx := context.Background()
+	roleRepo := new(mockRoleRepo)
+	permRepo := new(mockPermRepoForRole)
+	enforcer := new(mockEnforcerForRole)
+
+	roleID := uuid.New()
+	permID := uuid.New()
+	role := &domain.Role{ID: roleID, Name: "Professor"}
+	perm := &domain.Permission{ID: permID, Slug: "user:read"}
+	roleRepo.On("FindByID", ctx, roleID).Return(role, nil)
+	enforcer.On("RemoveAllPoliciesForRole", ctx, "Professor").Return(nil)
+	permRepo.On("FindByID", ctx, permID).Return(perm, nil)
+	enforcer.On("AddPolicy", ctx, "Professor", "user", "read").Return(false, errors.New("casbin error"))
+
+	err := newRoleUCWithEnforcer(roleRepo, permRepo, enforcer).SetRolePermissions(ctx, roleID, []uuid.UUID{permID})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "casbin error")
 }

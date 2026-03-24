@@ -238,3 +238,35 @@ func (h *RoleHandler) Delete(c *echo.Context) error {
 
 	return c.NoContent(http.StatusNoContent)
 }
+
+// SetRolePermissions (PUT /roles/:id/permissions)
+func (h *RoleHandler) SetRolePermissions(c *echo.Context) error {
+	idStr := c.Param("id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "id inválido")
+	}
+
+	var req struct {
+		PermissionIDs []uuid.UUID `json:"permission_ids"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "dados inválidos")
+	}
+
+	ctx := c.Request().Context()
+
+	role, err := h.roleUseCase.FindRoleByID(ctx, id, false)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao buscar perfil")
+	}
+	if role == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "perfil não encontrado")
+	}
+
+	if err := h.roleUseCase.SetRolePermissions(ctx, id, req.PermissionIDs); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "erro ao atribuir permissões")
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}

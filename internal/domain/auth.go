@@ -58,6 +58,7 @@ type Enforcer interface {
 	Enforce(ctx context.Context, roleName, resource, action string) (bool, error)
 	AddPolicy(ctx context.Context, roleName, resource, action string) (bool, error)
 	RemovePolicy(ctx context.Context, roleName, resource, action string) (bool, error)
+	RemoveAllPoliciesForRole(ctx context.Context, roleName string) error
 }
 
 // PermissionRepository is the catalog of available permissions that can be

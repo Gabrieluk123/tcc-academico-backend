@@ -55,6 +55,8 @@ func SetupRoutes(
 		middleware.RequirePermission(enforcer, roleRepo, "role", "update"))
 	api.PATCH("/roles/:id/users", roleHandler.ReassignUsers,
 		middleware.RequirePermission(enforcer, roleRepo, "role", "update"))
+	api.PUT("/roles/:id/permissions", roleHandler.SetRolePermissions,
+		middleware.RequirePermission(enforcer, roleRepo, "role", "update"))
 	api.DELETE("/roles/:id", roleHandler.Delete,
 		middleware.RequirePermission(enforcer, roleRepo, "role", "delete"))
 
